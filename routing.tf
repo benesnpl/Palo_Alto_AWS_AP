@@ -1,22 +1,22 @@
-#### LOCAL ROUTING TABLES CREATION #####
+### Local Routing Tables Creation ###
 
 resource "aws_route_table" "mgmt_rt" {
-  depends_on = [aws_vpn_connection.Oakbrook,aws_internet_gateway.main_igw,aws_ec2_transit_gateway.main_tgw]
-  vpc_id = aws_vpc.main_vpc.id
+  depends_on                                    = [aws_internet_gateway.main_igw,aws_ec2_transit_gateway.main_tgw,aws_vpn_connection.Oakbrook]
+  vpc_id                                        = aws_vpc.main_vpc.id
   
   route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main_igw.id
+    cidr_block                                  = "0.0.0.0/0"
+    gateway_id                                  = aws_internet_gateway.main_igw.id
   }
   
   route {
-    cidr_block = "10.159.94.0/23"
-    gateway_id = aws_ec2_transit_gateway.main_tgw.id
+    cidr_block                                  = "10.159.94.0/23"
+    gateway_id                                  = aws_ec2_transit_gateway.main_tgw.id
   }
   
    route {
-    cidr_block = "100.70.0.0/15"
-    gateway_id = aws_ec2_transit_gateway.main_tgw.id
+    cidr_block                                  = "100.70.0.0/15"
+    gateway_id                                  = aws_ec2_transit_gateway.main_tgw.id
   }
   
   tags = {
@@ -24,21 +24,20 @@ resource "aws_route_table" "mgmt_rt" {
   }
 }
 
-
 resource "aws_route_table_association" "mgmt" {
-  depends_on = [aws_route_table.mgmt_rt,aws_ec2_transit_gateway.main_tgw]
-  subnet_id      = aws_subnet.MNG.id
-  route_table_id = aws_route_table.mgmt_rt.id
+  depends_on                                    = [aws_route_table.mgmt_rt,aws_ec2_transit_gateway.main_tgw]
+  count                                         = length(var.subnets_cidr_mng)
+  subnet_id                                     = element(aws_subnet.MNG.*.id,count.index)
+  route_table_id                                = aws_route_table.mgmt_rt.id
 }
 
-
 resource "aws_route_table" "private_rt" {
-  depends_on = [aws_vpn_connection.Oakbrook,aws_internet_gateway.main_igw,aws_ec2_transit_gateway.main_tgw]
-  vpc_id = aws_vpc.main_vpc.id
+  depends_on                                    = [aws_internet_gateway.main_igw,aws_ec2_transit_gateway.main_tgw,aws_vpn_connection.Oakbrook]
+  vpc_id                                        = aws_vpc.main_vpc.id
   
   route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_ec2_transit_gateway.main_tgw.id
+    cidr_block                                  = "0.0.0.0/0"
+    gateway_id                                  = aws_ec2_transit_gateway.main_tgw.id
   }
   
   
@@ -48,17 +47,18 @@ resource "aws_route_table" "private_rt" {
 }
 
 resource "aws_route_table_association" "prvt" {
-  depends_on = [aws_route_table.private_rt]
-  subnet_id      = aws_subnet.Private.id
-  route_table_id = aws_route_table.private_rt.id
-}  
-  
+  depends_on                                    = [aws_route_table.private_rt]
+  count                                         = length(var.subnets_cidr_private)
+  subnet_id                                     = element(aws_subnet.Private.*.id,count.index)
+  route_table_id                                = aws_route_table.private_rt.id
+}
+
 resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.main_vpc.id
+  vpc_id                                        = aws_vpc.main_vpc.id
   
   route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main_igw.id
+    cidr_block                                  = "0.0.0.0/0"
+    gateway_id                                  = aws_internet_gateway.main_igw.id
   }
   
   
@@ -68,31 +68,41 @@ resource "aws_route_table" "public_rt" {
 }
 
 resource "aws_route_table_association" "public" {
-  depends_on = [aws_route_table.public_rt]
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public_rt.id
+  depends_on                                    = [aws_route_table.public_rt]
+  count                                         = length(var.subnets_cidr_public)
+  subnet_id                                     = element(aws_subnet.public.*.id,count.index)
+  route_table_id                                = aws_route_table.public_rt.id
 }
 
-
-resource "aws_route_table" "tgw_rt" {
-  depends_on = [aws_ec2_transit_gateway.main_tgw,aws_network_interface.private1]
-  vpc_id = aws_vpc.main_vpc.id
-  
+resource "aws_route_table" "tgw1_rt" {
+  vpc_id                                        =  aws_vpc.main_vpc.id
   route {
-    cidr_block = "0.0.0.0/0"
-    network_interface_id = aws_network_interface.private1.id
+    cidr_block                                  = "0.0.0.0/0"
+    network_interface_id                        = aws_network_interface.private1.id
   }
-  
-  
   tags = {
     Name                                        = join("", [var.coid, "-", var.aws_region, "-tgw-rt"])
   }
 }
 
 resource "aws_route_table_association" "tgw1" {
-  depends_on = [aws_route_table.tgw_rt]
-  subnet_id      =aws_subnet.TGW.id
-  route_table_id = aws_route_table.tgw_rt.id
+  depends_on                                    = [aws_route_table.tgw1_rt]
+  subnet_id                                     = aws_subnet.TGW[0].id
+  route_table_id                                = aws_route_table.tgw1_rt.id
+}
+
+resource "aws_route_table" "ha_rt" {
+  vpc_id                                        =  aws_vpc.main_vpc.id
+  
+  tags = {
+    Name                                        = join("", [var.coid, "-", var.aws_region, "-ha-rt"])
+  }
+}
+
+resource "aws_route_table_association" "ha1" {
+  depends_on                                    = [aws_route_table.ha_rt]
+  subnet_id                                     = aws_subnet.ha.id
+  route_table_id                                = aws_route_table.ha_rt.id
 }
 
 
